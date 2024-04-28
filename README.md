@@ -3,14 +3,14 @@
 
 Clone the project
 ```bash
- git clone https://github.com/17ramya/Hostel-Admission-System
+ git clone https://github.com/17ramya/Heart-Disease-Prediction
 ```
 
 Go to the project directory
 ```bash
   cd Heart disease prediction
 ```
-Install dependencies
+Install libaries
 ```bash
   pip install pandas
   pip install numpy
