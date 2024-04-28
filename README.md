@@ -18,7 +18,7 @@ Install libaries
   pip install sklearn
   pip install keras 
 ```
-
+Open Jupyter Notebook
 ```bash
-  run Heart Disease Prediction.ipynb
+  open Heart Disease Prediction.ipynb
 ```
