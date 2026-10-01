@@ -240,6 +240,10 @@ Open **http://127.0.0.1:5000** in your browser. You are redirected to the
 
 ---
 
+## Live Demo link
+
+
+
 ## 🔁 Retrain the models (optional)
 
 The training script needs TensorFlow and friends. Install them **into the same
@@ -351,84 +355,4 @@ python -m unittest test_app -v
 
 ---
 
-## ☁️ Deploy to Vercel
-
-The project uses Vercel's **zero-configuration Flask** support: Vercel detects
-the `Flask` dependency in `requirements.txt` and loads the `app` object from
-`app.py`. **No `vercel.json` is required.**
-
-Because the app performs inference in pure Python (`model.py`), it does **not**
-bundle TensorFlow, keeping the serverless function well under Vercel's size
-limit.
-
-### Option A — Deploy from GitHub (recommended)
-
-1. Push this repository to GitHub (already done if you cloned it).
-2. Go to <https://vercel.com/new> and **Import** the repository.
-3. Vercel auto-detects the framework. Leave the defaults:
-   - **Framework Preset:** `Flask`
-   - **Build Command:** *(leave empty)*
-   - **Output Directory:** *(leave empty)*
-4. *(Recommended)* add your credentials under **Settings → Environment
-   Variables**: `SECRET_KEY` (a long random string), `APP_USERNAME`,
-   `APP_PASSWORD` — see [Authentication](#-authentication). Without a fixed
-   `SECRET_KEY` the app falls back to a development default.
-5. Click **Deploy**. Your app is live at
-   `https://<project-name>.vercel.app`.
-
-### Option B — Deploy with the Vercel CLI
-
-```bash
-npm install -g vercel    # one-time
-vercel login             # one-time
-vercel                   # preview deployment
-vercel --prod            # production deployment
-```
-
-### Python version
-
-`.python-version` pins the deployment to **Python 3.12**. To change it, edit
-that file (e.g. `3.13`).
-
----
-
-## 🛠️ Troubleshooting
-
-| Problem | Fix |
-| --- | --- |
-| `ModuleNotFoundError: No module named 'flask'` | Activate the virtual environment, then `pip install -r requirements.txt`. |
-| `python app.py` runs but the page shows a 500 error | Make sure `model/weights.json` exists (run `python train.py` to regenerate it). |
-| `train.py` fails to download the dataset | Place a local copy at `data/processed.cleveland.data` and re-run. |
-| Vercel build tries to install TensorFlow | Confirm `requirements.txt` contains only `Flask`; training deps live in `requirements-train.txt`. |
-| Port 5000 already in use | Run with `set PORT=5001 && python app.py` (Windows) or `PORT=5001 python app.py` (macOS/Linux). |
-| Can't sign in | Use `admin` / `heart123`, or the value of `APP_USERNAME` / `APP_PASSWORD` if you set them. |
-| "That username is already taken" | Pick another username, or use **Sign in** instead of **Create one**. |
-| "Password must be at least 6 characters" | Registration requires ≥ 6 characters (see `MIN_PASSWORD_LENGTH` in `app.py`). |
-| Registered users vanish after a redeploy (Vercel) | Expected — the bundle is read-only so `users.json` falls back to `/tmp`. Point `USERS_FILE` at persistent storage or use a database. |
-| Signed out after every deploy (Vercel) | Set a fixed `SECRET_KEY` environment variable so the session cookie is always signed with the same key. |
-| `401 {"error":"Authentication required."}` from a script | Sign in first and reuse the cookie: `curl -c jar.txt -d "username=admin&password=heart123" …/login`, then add `-b jar.txt`. |
-| An input box shows an old value | Hard-refresh (Ctrl+F5). The page clears every field on load and sets `autocomplete="off"` on all inputs. |
-
----
-
-## 📄 Notes & disclaimer
-
-- The original notebook and its exported `.py` file are kept under
-  `Heart disease prediction/` for reference. `train.py` **supersedes** that
-  broken export (the old file contained bare text like `IMPORTING DATASET:`
-  which is invalid Python).
-- Feature values are used **raw**, exactly as in the notebook (no
-  normalisation), so the web form expects the original UCI encodings. Logistic
-  Regression standardises internally (the mean/scale it learned is stored in the
-  weights file).
-- Input values are always assembled in the dataset's **column order** before
-  being passed to the models, so changing how the form groups or orders fields
-  never affects predictions.
-- Login state lives in a signed session cookie (set `SECRET_KEY`). Passwords are
-  stored as salted hashes via `werkzeug.security`; the built-in demo account is
-  `admin` / `heart123`, new accounts can be created at `/signup` (kept in
-  `users.json`), and every page except `/api/health` requires a session.
-- **This project is an educational machine-learning demo on a small public
-  dataset. It is not a medical device and must not be used for real clinical
-  decisions.**
 
