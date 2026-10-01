@@ -14,6 +14,10 @@ apicheck.log
 *.log
 data/
 
+# Locally registered accounts - never upload a user database in the bundle.
+users.json
+users.json.tmp
+
 # Docs / big source assets not needed to serve the app.
 *.pptx
 *.docx
