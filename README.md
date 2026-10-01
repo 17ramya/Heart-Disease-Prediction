@@ -17,6 +17,9 @@ runnable Python script and turns it into a deployable Flask website.
   input sections, an animated **risk gauge**, **per-model prediction cards**, a
   **severity chart** and a **"key risk factors"** breakdown – all vanilla JS,
   no build step.
+- 🔐 **Login + light mode** – the whole site (pages *and* API) sits behind a
+  session login with a light-mode sign-in page, and the interface opens in
+  **light mode** with a light/dark toggle in the menu. Forms always start empty.
 - ⚡ **Zero heavy dependencies at runtime** – the trained weights are exported
   to `model/weights.json` and evaluated in pure Python, so the deployed app
   needs **only Flask** (no TensorFlow, no scikit-learn). This is what keeps it
@@ -35,6 +38,8 @@ runnable Python script and turns it into a deployable Flask website.
 | Classic models | Logistic Regression, Random Forest, Gaussian NB, K-Nearest Neighbours |
 | Backend | Flask (WSGI) |
 | Frontend | Server-rendered HTML + vanilla JS: sticky menu, risk gauge, cards, charts |
+| Auth | Session login (`/login`) with hashed passwords; UI **and** API protected |
+| Theme | **Light mode by default** + light/dark toggle in the top menu |
 | Runtime deps | Flask only (`requirements.txt`) |
 | Training deps | TensorFlow / Keras / scikit-learn (`requirements-train.txt`) |
 | Hosting | Vercel (zero-config Flask preset) |
@@ -74,7 +79,8 @@ Heart-Disease-Prediction/
 │   ├── weights.json           # Trained weights + metadata (generated)
 │   └── feature_histograms.png # EDA plot (generated)
 ├── templates/
-│   └── index.html             # Web UI
+│   ├── index.html             # Web UI
+│   └── login.html             # Sign-in page (light mode)
 ├── static/
 │   ├── style.css              # Styles
 │   └── app.js                 # Front-end logic
@@ -107,6 +113,50 @@ After a prediction the results panel appears with:
 - **per-model cards** with each classifier's own probability and test accuracy,
 - a **severity distribution** bar chart (the 5-class network),
 - the **top risk factors**, with red/green bars for *increases* / *decreases* risk.
+
+The page always opens in **light mode** — press the ☼ / ☾ button in the top menu
+to switch themes (your choice is remembered by the browser). The input boxes are
+always **empty on load**: nothing from a previous patient is kept, not even after
+a refresh or a back/forward navigation.
+
+---
+
+## 🔐 Authentication
+
+Everything except `/api/health` sits behind a session login.
+
+* **Sign-in page** `/login` (light mode) — username + password, hashed with
+  `werkzeug.security` (`generate_password_hash` / `check_password_hash`).
+* Visiting `/` or any `/api/*` endpoint without a session redirects browsers to
+  `/login` and answers API clients with
+  **`401 {"error": "Authentication required."}`**.
+* The top menu shows the signed-in user and a **Sign out** link (`/logout`).
+* Sessions are signed cookies valid for **7 days**.
+
+**Default demo credentials**
+
+| Username | Password |
+| --- | --- |
+| `admin` | `heart123` |
+
+**Change them with environment variables** (locally, or in the Vercel dashboard
+under *Settings → Environment Variables*):
+
+| Variable | Purpose |
+| --- | --- |
+| `SECRET_KEY` | **Set this in production** — signs the session cookie |
+| `APP_USERNAME` | Username for a single account |
+| `APP_PASSWORD` | Password for that account |
+| `APP_USERS` | Several accounts, e.g. `alice:secret,bob:hunter2` |
+
+```powershell
+$env:SECRET_KEY="a-long-random-string"
+$env:APP_USERNAME="ramya"; $env:APP_PASSWORD="my-password"
+python app.py
+```
+
+> The login page shows the demo credentials as a hint. Delete the `.auth-hint`
+> block from `templates/login.html` if you don't want that.
 
 ---
 
@@ -149,8 +199,10 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open **http://127.0.0.1:5000** in your browser, fill in the patient data and
-click **Predict**.
+Open **http://127.0.0.1:5000** in your browser. You are redirected to the
+**sign-in page** first — use `admin` / `heart123` (or your own `APP_USERNAME` /
+`APP_PASSWORD`). After signing in, fill in the patient data and click
+**Predict**.
 
 > The repository already ships a trained `model/weights.json`, so you can run
 > the website **without** installing TensorFlow.
@@ -195,15 +247,28 @@ Restart `python app.py` afterwards to serve the freshly trained model.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/` | Web UI |
-| `GET` | `/api/health` | Health check → `{"status": "ok"}` |
-| `GET` | `/api/metadata` | Feature definitions + model metadata |
-| `POST` | `/api/predict` | Run a prediction |
+| `GET` | `/login` | Sign-in page (light mode) |
+| `POST` | `/login` | Submit credentials (`username`, `password`, optional `next`) |
+| `GET` | `/logout` | End the session |
+| `GET` | `/` | Web UI *(requires login)* |
+| `GET` | `/api/health` | Health check → `{"status": "ok"}` *(public)* |
+| `GET` | `/api/session` | Current session → `{"authenticated": true, "user": "admin"}` |
+| `GET` | `/api/metadata` | Feature definitions + model metadata *(requires login)* |
+| `POST` | `/api/predict` | Run a prediction *(requires login)* |
+
+> Every protected endpoint redirects browsers to `/login` (302) but answers
+> `/api/*` requests with **`401 {"error": "Authentication required."}`**, so you
+> must send the session cookie when calling the API from a script.
 
 **Example request**
 
 ```bash
-curl -X POST http://127.0.0.1:5000/api/predict \
+# 1. sign in once and keep the session cookie
+curl -c jar.txt -X POST http://127.0.0.1:5000/login \
+  -d "username=admin&password=heart123"
+
+# 2. call the protected endpoint with that cookie
+curl -b jar.txt -X POST http://127.0.0.1:5000/api/predict \
   -H "Content-Type: application/json" \
   -d '{"age":63,"sex":1,"cp":1,"trestbps":145,"chol":233,"fbs":1,
        "restecg":2,"thalach":150,"exang":0,"oldpeak":2.3,"slope":3,
@@ -271,7 +336,11 @@ limit.
    - **Framework Preset:** `Flask`
    - **Build Command:** *(leave empty)*
    - **Output Directory:** *(leave empty)*
-4. Click **Deploy**. Your app is live at
+4. *(Recommended)* add your credentials under **Settings → Environment
+   Variables**: `SECRET_KEY` (a long random string), `APP_USERNAME`,
+   `APP_PASSWORD` — see [Authentication](#-authentication). Without a fixed
+   `SECRET_KEY` the app falls back to a development default.
+5. Click **Deploy**. Your app is live at
    `https://<project-name>.vercel.app`.
 
 ### Option B — Deploy with the Vercel CLI
@@ -299,6 +368,10 @@ that file (e.g. `3.13`).
 | `train.py` fails to download the dataset | Place a local copy at `data/processed.cleveland.data` and re-run. |
 | Vercel build tries to install TensorFlow | Confirm `requirements.txt` contains only `Flask`; training deps live in `requirements-train.txt`. |
 | Port 5000 already in use | Run with `set PORT=5001 && python app.py` (Windows) or `PORT=5001 python app.py` (macOS/Linux). |
+| Can't sign in | Use `admin` / `heart123`, or the value of `APP_USERNAME` / `APP_PASSWORD` if you set them. |
+| Signed out after every deploy (Vercel) | Set a fixed `SECRET_KEY` environment variable so the session cookie is always signed with the same key. |
+| `401 {"error":"Authentication required."}` from a script | Sign in first and reuse the cookie: `curl -c jar.txt -d "username=admin&password=heart123" …/login`, then add `-b jar.txt`. |
+| An input box shows an old value | Hard-refresh (Ctrl+F5). The page clears every field on load and sets `autocomplete="off"` on all inputs. |
 
 ---
 
@@ -315,6 +388,9 @@ that file (e.g. `3.13`).
 - Input values are always assembled in the dataset's **column order** before
   being passed to the models, so changing how the form groups or orders fields
   never affects predictions.
+- Login state lives in a signed session cookie (set `SECRET_KEY`). Passwords are
+  stored as salted hashes via `werkzeug.security`; the built-in demo account is
+  `admin` / `heart123` and every page except `/api/health` requires a session.
 - **This project is an educational machine-learning demo on a small public
   dataset. It is not a medical device and must not be used for real clinical
   decisions.**

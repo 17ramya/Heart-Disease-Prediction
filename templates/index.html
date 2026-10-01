@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -17,16 +17,28 @@
         <span class="brand-heart">&#10084;</span>
         <span>Heart<strong>Risk</strong></span>
       </a>
-      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu">
-        <span></span><span></span><span></span>
-      </button>
       <ul class="nav-links" id="nav-links">
         <li><a href="#predict">Predict</a></li>
         <li><a href="#performance">Models</a></li>
         <li><a href="#dataset">Dataset</a></li>
         <li><a href="#api">API</a></li>
         <li><a href="#about">About</a></li>
+        <li class="nav-user">
+          <span class="user-chip" title="Signed in">&#128100; {{ current_user }}</span>
+        </li>
+        <li class="nav-user">
+          <a class="logout-link" href="{{ url_for('logout') }}">Sign out</a>
+        </li>
       </ul>
+
+      <div class="nav-actions">
+        <button class="theme-toggle" id="theme-toggle" type="button"
+                aria-label="Toggle light / dark theme"
+                title="Toggle light / dark theme">&#9788;</button>
+        <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu" type="button">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
     </div>
   </nav>
 
@@ -53,8 +65,10 @@
     <!-- ================= PREDICT ================= -->
     <form id="predict-form" class="card" autocomplete="off">
       <h2 id="predict">Patient data</h2>
-      <p class="lead">Fill in the clinical measurements, then press
-        <strong>Predict risk</strong>.</p>
+      <p class="lead">
+        Enter the clinical measurements, then press <strong>Predict risk</strong>.
+        Every field starts empty &mdash; no previously entered values are kept.
+      </p>
 
       {% for group in feature_groups %}
       <fieldset class="group">
@@ -66,17 +80,17 @@
               {% if feature.unit %}<span class="unit">({{ feature.unit }})</span>{% endif %}
             </label>
             {% if feature.type == 'select' %}
-            <select id="{{ feature.name }}" name="{{ feature.name }}">
+            <select id="{{ feature.name }}" name="{{ feature.name }}"
+                    autocomplete="off" required>
+              <option value="" selected disabled>Select&hellip;</option>
               {% for option in feature.options %}
-              <option value="{{ option.value }}"
-                {% if option.value == feature.default %}selected{% endif %}>
-                {{ option.label }}
-              </option>
+              <option value="{{ option.value }}">{{ option.label }}</option>
               {% endfor %}
             </select>
             {% else %}
             <input id="{{ feature.name }}" name="{{ feature.name }}" type="number"
-                   value="{{ feature.default }}"
+                   placeholder="{{ feature.placeholder }}"
+                   autocomplete="off"
                    {% if feature.min is defined %}min="{{ feature.min }}"{% endif %}
                    {% if feature.max is defined %}max="{{ feature.max }}"{% endif %}
                    {% if feature.step is defined %}step="{{ feature.step }}"{% endif %}

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in &middot; Heart Disease Prediction</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="auth-body">
+
+  <main class="auth-wrap">
+    <section class="auth-card">
+      <div class="auth-brand">
+        <span class="brand-heart">&#10084;</span>
+        <span>Heart<strong>Risk</strong></span>
+      </div>
+
+      <h1>Sign in</h1>
+      <p class="auth-sub">Heart Disease Prediction &mdash; restricted access</p>
+
+      {% if error %}
+      <div class="alert" role="alert">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('login') }}" autocomplete="off">
+        <input type="hidden" name="next" value="{{ next }}" />
+
+        <label class="auth-field">
+          <span>Username</span>
+          <input type="text" name="username" id="username" required autofocus
+                 autocomplete="off" placeholder="Enter your username" />
+        </label>
+
+        <label class="auth-field">
+          <span>Password</span>
+          <input type="password" name="password" id="password" required
+                 autocomplete="new-password" placeholder="Enter your password" />
+        </label>
+
+        <button type="submit" class="auth-btn">Sign in</button>
+      </form>
+
+      <div class="auth-hint">
+        <strong>Demo account</strong>
+        <span>username <code>admin</code> &nbsp;&middot;&nbsp; password <code>heart123</code></span>
+        <small>
+          Override with the <code>APP_USERNAME</code> / <code>APP_PASSWORD</code>
+          environment variables, or <code>APP_USERS</code> for several accounts.
+        </small>
+      </div>
+    </section>
+
+    <p class="auth-foot">
+      Educational machine-learning demo &mdash; not a medical device.
+    </p>
+  </main>
+
+</body>
+</html>

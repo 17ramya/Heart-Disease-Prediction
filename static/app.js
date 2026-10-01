@@ -9,6 +9,76 @@
   function color(disease) { return disease ? "#dc2626" : "#16a34a"; }
   function label(key) { return LABELS[key] || key; }
 
+  /* ---------------- Theme (light mode by default) ---------------- */
+  var THEME_KEY = "heartrisk-theme";
+
+  function currentTheme() {
+    try { return localStorage.getItem(THEME_KEY) || "light"; }
+    catch (e) { return "light"; }
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    var btn = el("theme-toggle");
+    if (btn) {
+      btn.textContent = theme === "dark" ? "\u263E" : "\u2600";
+      btn.setAttribute(
+        "title",
+        theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+      );
+    }
+  }
+
+  applyTheme(currentTheme());
+
+  var themeToggle = el("theme-toggle");
+  if (themeToggle) {
+    themeToggle.addEventListener("click", function () {
+      var isDark =
+        document.documentElement.getAttribute("data-theme") === "dark";
+      var next = isDark ? "light" : "dark";
+      try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ignore */ }
+      applyTheme(next);
+    });
+  }
+
+  /* ---------------- Start with a clean slate ---------------- */
+  /* The application boxes must never show a previous patient's data, not even
+     after a refresh or a back/forward navigation (browser form restoration). */
+  function clearForm() {
+    var node = el("predict-form");
+    if (!node) { return; }
+    var elements = node.elements;
+    for (var i = 0; i < elements.length; i++) {
+      var field = elements[i];
+      if (!field.name) { continue; }
+      if (field.tagName === "SELECT") {
+        field.value = "";
+        field.selectedIndex = 0; // back to the "Select..." placeholder
+      } else {
+        field.value = "";
+      }
+    }
+  }
+
+  function clearResults() {
+    var results = el("results");
+    if (results) { results.classList.add("hidden"); }
+    ["model-cards", "categorical-bars", "risk-factors"].forEach(function (id) {
+      var node = el(id);
+      if (node) { node.innerHTML = ""; }
+    });
+  }
+
+  clearForm();
+  clearResults();
+  window.addEventListener("pageshow", function (event) {
+    if (event.persisted) {
+      clearForm();
+      clearResults();
+    }
+  });
+
   /* ---------------- Navigation menu ---------------- */
   var navToggle = el("nav-toggle");
   var navLinks = el("nav-links");
@@ -72,6 +142,10 @@
       body: JSON.stringify(payload),
     })
       .then(function (response) {
+        if (response.status === 401) {
+          window.location.href = "/login";
+          throw new Error("Session expired - please sign in again.");
+        }
         return response.json().then(function (data) {
           if (!response.ok) { throw new Error(data.error || "Prediction failed."); }
           return data;
