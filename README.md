@@ -9,13 +9,18 @@ This project converts the original Jupyter notebook
 (`Heart disease prediction/Heart Disease Prediction.ipynb`) into a clean,
 runnable Python script and turns it into a deployable Flask website.
 
-- 🧠 **Two Keras neural networks** – a 5-class severity model and a binary
-  *disease / no-disease* model.
-- 🌐 **Flask web UI + JSON API** – enter patient data in the browser.
+- 🧠 **Six models, one ensemble** – two Keras neural networks (a 5-class
+  severity model and a binary *disease / no-disease* model) **plus** Logistic
+  Regression, Random Forest, Gaussian Naive Bayes and K-Nearest Neighbours.
+  Every binary model votes and the final assessment is their ensemble average.
+- 🌐 **Rich Flask web UI + JSON API** – a sticky **navigation menu**, grouped
+  input sections, an animated **risk gauge**, **per-model prediction cards**, a
+  **severity chart** and a **"key risk factors"** breakdown – all vanilla JS,
+  no build step.
 - ⚡ **Zero heavy dependencies at runtime** – the trained weights are exported
   to `model/weights.json` and evaluated in pure Python, so the deployed app
-  needs **only Flask** (no TensorFlow). This is what makes it fit inside
-  Vercel's serverless function size limit.
+  needs **only Flask** (no TensorFlow, no scikit-learn). This is what keeps it
+  inside Vercel's serverless function size limit.
 - 🚀 **Ready for Vercel** – zero-configuration deployment.
 
 ---
@@ -24,13 +29,37 @@ runnable Python script and turns it into a deployable Flask website.
 
 | Feature | Description |
 | --- | --- |
-| Dataset | UCI Cleveland heart disease (303 patients, 13 features) |
-| Models | Neural nets: `13 → 8 → 4 → 5` (softmax) and `13 → 8 → 4 → 1` (sigmoid) |
+| Dataset | UCI Cleveland heart disease (297 patients after cleaning, 13 features) |
+| Models | 5 binary classifiers + 1 five-class severity network → ensemble |
+| Neural nets | `13 → 8 → 4 → 5` (softmax) and `13 → 8 → 4 → 1` (sigmoid) |
+| Classic models | Logistic Regression, Random Forest, Gaussian NB, K-Nearest Neighbours |
 | Backend | Flask (WSGI) |
-| Frontend | Server-rendered HTML form + vanilla JS (no build step) |
+| Frontend | Server-rendered HTML + vanilla JS: sticky menu, risk gauge, cards, charts |
 | Runtime deps | Flask only (`requirements.txt`) |
 | Training deps | TensorFlow / Keras / scikit-learn (`requirements-train.txt`) |
 | Hosting | Vercel (zero-config Flask preset) |
+
+---
+
+## 🧪 Models & accuracy
+
+Every model is trained by `train.py` and evaluated on the **same held-out test
+set** (60 patients, never seen during training). These are the numbers baked into
+the shipped `model/weights.json` and displayed in the *Models* section of the web
+page:
+
+| Model | Task | Accuracy | ROC-AUC |
+| --- | --- | --- | --- |
+| Gaussian Naive Bayes | disease / no disease | **91.7%** | 0.946 |
+| Logistic Regression | disease / no disease | **86.7%** | 0.942 |
+| Random Forest | disease / no disease | **86.7%** | 0.940 |
+| Neural Network | disease / no disease | 73.3% | 0.824 |
+| K-Nearest Neighbours | disease / no disease | 65.0% | 0.670 |
+| Neural Network | severity (5 classes) | 70.0% | — |
+| **Ensemble** | disease / no disease | average of the 5 binary models | — |
+
+Exact numbers vary slightly between runs/versions of the libraries — re-run
+`python train.py` to regenerate them.
 
 ---
 
@@ -57,6 +86,27 @@ Heart-Disease-Prediction/
 ├── .vercelignore
 └── Heart disease prediction/  # Original notebook & documents (archived)
 ```
+
+---
+
+## 🖥️ Web interface
+
+The single page is organised into sections reachable from the **sticky top menu**:
+
+| Menu item | Section | What it shows |
+| --- | --- | --- |
+| **Predict** | input form | 13 clinical fields grouped into *Demographics*, *Symptoms*, *Vitals & labs* and *ECG & tests* |
+| **Models** | performance table | accuracy & ROC-AUC of every model |
+| **Dataset** | reference table | feature ranges and means from the training data |
+| **API** | docs | endpoints and a ready-to-copy `curl` example |
+| **About** | info | how the project works + disclaimer |
+
+After a prediction the results panel appears with:
+
+- an **ensemble verdict** and an animated **risk gauge** (0–100%),
+- **per-model cards** with each classifier's own probability and test accuracy,
+- a **severity distribution** bar chart (the 5-class network),
+- the **top risk factors**, with red/green bars for *increases* / *decreases* risk.
 
 ---
 
@@ -126,10 +176,13 @@ This will:
 
 1. Download the Cleveland dataset (or use `data/processed.cleveland.data` if
    you place a local copy there).
-2. Clean, split and train both neural networks (100 epochs each).
-3. Print the accuracy / classification reports.
-4. **Overwrite `model/weights.json`** with the newly trained weights and save a
-   histogram plot to `model/feature_histograms.png`.
+2. Clean and split the data.
+3. Train **both neural networks** (100 epochs each) **and** the four classic
+   models (Logistic Regression, Random Forest, Gaussian Naive Bayes,
+   K-Nearest Neighbours).
+4. Print the accuracy / ROC-AUC comparison for every model.
+5. **Overwrite `model/weights.json`** with all of the trained weights plus
+   metadata, and save a histogram plot to `model/feature_histograms.png`.
 
 Restart `python app.py` afterwards to serve the freshly trained model.
 
@@ -162,18 +215,32 @@ curl -X POST http://127.0.0.1:5000/api/predict \
 ```json
 {
   "binary": {
-    "prediction": "Heart Disease",
-    "label": 1,
-    "probability": 0.5431,
-    "confidence": 0.5431
+    "prediction": "No Heart Disease",
+    "label": 0,
+    "probability": 0.3421,
+    "confidence": 0.6579
   },
+  "models": [
+    { "key": "nn_binary",     "label": "Neural Network",        "probability": 0.069, "prediction": "No Heart Disease", "accuracy": 0.7333, "roc_auc": 0.8241 },
+    { "key": "logistic",      "label": "Logistic Regression",   "probability": 0.0,   "prediction": "No Heart Disease", "accuracy": 0.8667, "roc_auc": 0.9421 },
+    { "key": "random_forest", "label": "Random Forest",         "probability": 0.409, "prediction": "No Heart Disease", "accuracy": 0.8667, "roc_auc": 0.9398 },
+    { "key": "gaussian_nb",   "label": "Gaussian Naive Bayes",  "probability": 0.0,   "prediction": "No Heart Disease", "accuracy": 0.9167, "roc_auc": 0.9456 },
+    { "key": "knn",           "label": "K-Nearest Neighbours",  "probability": 0.429, "prediction": "No Heart Disease", "accuracy": 0.65,   "roc_auc": 0.6701 }
+  ],
   "categorical": {
     "class": 0,
     "class_label": "No disease (0)",
-    "probabilities": { "No disease (0)": 0.41, "Mild (1)": 0.22 }
-  }
+    "probabilities": { "No disease (0)": 0.41, "Mild (1)": 0.22, "Moderate (2)": 0.18, "Severe (3)": 0.12, "Very severe (4)": 0.07 }
+  },
+  "risk_factors": [
+    { "feature": "fbs", "contribution": -1.0087, "increases_risk": false, "raw_value": 1.0 }
+  ]
 }
 ```
+
+> `binary` is the **ensemble** (mean of the five binary models); `models` lists
+> each model's own verdict; `risk_factors` are the top logistic-regression
+> contributions (`increases_risk: true` = pushes the risk *up*).
 
 ---
 
@@ -242,7 +309,12 @@ that file (e.g. `3.13`).
   broken export (the old file contained bare text like `IMPORTING DATASET:`
   which is invalid Python).
 - Feature values are used **raw**, exactly as in the notebook (no
-  normalisation), so the web form expects the original UCI encodings.
+  normalisation), so the web form expects the original UCI encodings. Logistic
+  Regression standardises internally (the mean/scale it learned is stored in the
+  weights file).
+- Input values are always assembled in the dataset's **column order** before
+  being passed to the models, so changing how the form groups or orders fields
+  never affects predictions.
 - **This project is an educational machine-learning demo on a small public
   dataset. It is not a medical device and must not be used for real clinical
   decisions.**

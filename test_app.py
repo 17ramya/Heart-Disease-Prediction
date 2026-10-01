@@ -1,4 +1,4 @@
-"""Basic tests for the Heart Disease Prediction web app.
+"""Tests for the Heart Disease Prediction web app.
 
 Run with::
 
@@ -7,23 +7,13 @@ Run with::
 
 import unittest
 
-from app import app
+from app import FEATURES, app
 
 
 VALID_PAYLOAD = {
-    "age": 63,
-    "sex": 1,
-    "cp": 1,
-    "trestbps": 145,
-    "chol": 233,
-    "fbs": 1,
-    "restecg": 2,
-    "thalach": 150,
-    "exang": 0,
-    "oldpeak": 2.3,
-    "slope": 3,
-    "ca": 0,
-    "thal": 6,
+    "age": 63, "sex": 1, "cp": 1, "trestbps": 145, "chol": 233, "fbs": 1,
+    "restecg": 2, "thalach": 150, "exang": 0, "oldpeak": 2.3, "slope": 3,
+    "ca": 0, "thal": 6,
 }
 
 
@@ -32,10 +22,16 @@ class HeartDiseaseAppTests(unittest.TestCase):
         app.config["TESTING"] = True
         self.client = app.test_client()
 
+    def test_feature_count(self):
+        self.assertEqual(len(FEATURES), 13)
+
     def test_index_page(self):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"Heart Disease Prediction", resp.data)
+        html = resp.data.decode()
+        self.assertIn("Heart Disease Prediction", html)
+        self.assertIn("Model performance", html)
+        self.assertIn("nav-links", html)  # navigation menu present
 
     def test_health(self):
         resp = self.client.get("/api/health")
@@ -47,15 +43,36 @@ class HeartDiseaseAppTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.get_json()
         self.assertEqual(len(body["features"]), 13)
+        self.assertIn("stats", body["features"][0])
+        self.assertIn("models", body["model"])
 
     def test_predict_valid(self):
         resp = self.client.post("/api/predict", json=VALID_PAYLOAD)
         self.assertEqual(resp.status_code, 200)
         body = resp.get_json()
-        self.assertIn(body["binary"]["prediction"], ["Heart Disease", "No Heart Disease"])
+
+        # ensemble verdict
+        self.assertIn(body["binary"]["prediction"],
+                      ["Heart Disease", "No Heart Disease"])
         self.assertGreaterEqual(body["binary"]["probability"], 0.0)
         self.assertLessEqual(body["binary"]["probability"], 1.0)
+
+        # every model reported
+        self.assertEqual(len(body["models"]), 5)
+        for model in body["models"]:
+            self.assertGreaterEqual(model["probability"], 0.0)
+            self.assertLessEqual(model["probability"], 1.0)
+
+        # severity + risk factors
         self.assertEqual(len(body["categorical"]["probabilities"]), 5)
+        self.assertTrue(len(body["risk_factors"]) >= 1)
+
+        # regression test: the value reported for each factor must match the
+        # input actually supplied for that feature (guards column ordering).
+        for factor in body["risk_factors"]:
+            self.assertEqual(
+                factor["raw_value"], float(VALID_PAYLOAD[factor["feature"]])
+            )
 
     def test_predict_missing_field(self):
         payload = dict(VALID_PAYLOAD)

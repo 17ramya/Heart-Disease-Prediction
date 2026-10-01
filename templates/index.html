@@ -5,83 +5,249 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Heart Disease Prediction</title>
   <meta name="description"
-        content="Neural-network heart disease risk prediction based on the UCI Cleveland dataset." />
+        content="Neural-network and ensemble heart disease risk prediction (UCI Cleveland dataset)." />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body>
-  <header class="hero">
+
+  <!-- ================= NAVIGATION MENU ================= -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a class="brand" href="#top">
+        <span class="brand-heart">&#10084;</span>
+        <span>Heart<strong>Risk</strong></span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="#predict">Predict</a></li>
+        <li><a href="#performance">Models</a></li>
+        <li><a href="#dataset">Dataset</a></li>
+        <li><a href="#api">API</a></li>
+        <li><a href="#about">About</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ================= HERO ================= -->
+  <header class="hero" id="top">
     <div class="hero-inner">
       <div class="heart">&#10084;</div>
       <h1>Heart Disease Prediction</h1>
       <p>
-        Enter the patient's clinical measurements below. Two neural networks
-        (a 5-class severity model and a binary disease / no-disease model)
-        return a prediction instantly.
+        An ensemble of {{ meta.models|length }} machine-learning models estimates the
+        likelihood of heart disease from 13 clinical measurements.
       </p>
+      <div class="hero-stats">
+        <div><strong>{{ meta.n_total_samples }}</strong><span>patients</span></div>
+        <div><strong>{{ meta.models|length }}</strong><span>models</span></div>
+        <div><strong>13</strong><span>features</span></div>
+      </div>
+      <a class="cta" href="#predict">Start prediction &darr;</a>
     </div>
   </header>
 
   <main class="container">
+
+    <!-- ================= PREDICT ================= -->
     <form id="predict-form" class="card" autocomplete="off">
-      <h2>Patient data</h2>
-      <div class="grid">
-        {% for feature in features %}
-        <div class="field">
-          <label for="{{ feature.name }}">{{ feature.label }}</label>
-          {% if feature.type == 'select' %}
-          <select id="{{ feature.name }}" name="{{ feature.name }}">
-            {% for option in feature.options %}
-            <option value="{{ option.value }}"
-              {% if option.value == feature.default %}selected{% endif %}>
-              {{ option.label }}
-            </option>
-            {% endfor %}
-          </select>
-          {% else %}
-          <input id="{{ feature.name }}" name="{{ feature.name }}" type="number"
-                 value="{{ feature.default }}"
-                 {% if feature.min is defined %}min="{{ feature.min }}"{% endif %}
-                 {% if feature.max is defined %}max="{{ feature.max }}"{% endif %}
-                 {% if feature.step is defined %}step="{{ feature.step }}"{% endif %}
-                 required />
-          {% endif %}
-          {% if feature.help is defined %}
-          <small>{{ feature.help }}</small>
-          {% endif %}
+      <h2 id="predict">Patient data</h2>
+      <p class="lead">Fill in the clinical measurements, then press
+        <strong>Predict risk</strong>.</p>
+
+      {% for group in feature_groups %}
+      <fieldset class="group">
+        <legend>{{ group }}</legend>
+        <div class="grid">
+          {% for feature in features if feature.group == group %}
+          <div class="field">
+            <label for="{{ feature.name }}">{{ feature.label }}
+              {% if feature.unit %}<span class="unit">({{ feature.unit }})</span>{% endif %}
+            </label>
+            {% if feature.type == 'select' %}
+            <select id="{{ feature.name }}" name="{{ feature.name }}">
+              {% for option in feature.options %}
+              <option value="{{ option.value }}"
+                {% if option.value == feature.default %}selected{% endif %}>
+                {{ option.label }}
+              </option>
+              {% endfor %}
+            </select>
+            {% else %}
+            <input id="{{ feature.name }}" name="{{ feature.name }}" type="number"
+                   value="{{ feature.default }}"
+                   {% if feature.min is defined %}min="{{ feature.min }}"{% endif %}
+                   {% if feature.max is defined %}max="{{ feature.max }}"{% endif %}
+                   {% if feature.step is defined %}step="{{ feature.step }}"{% endif %}
+                   required />
+            {% endif %}
+            <small>{{ feature.help }}</small>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
-      </div>
+      </fieldset>
+      {% endfor %}
 
       <div class="actions">
-        <button type="submit" id="submit-btn">Predict</button>
+        <button type="submit" id="submit-btn">Predict risk</button>
         <button type="reset" class="ghost">Reset</button>
       </div>
     </form>
 
-    <section id="result" class="card result hidden" aria-live="polite">
-      <h2>Result</h2>
-      <div class="verdict" id="verdict"></div>
-      <div class="meter"><div class="meter-fill" id="meter-fill"></div></div>
-      <p class="prob" id="prob-text"></p>
+    <!-- ================= RESULTS ================= -->
+    <section id="results" class="results hidden" aria-live="polite">
+      <div class="card verdict-card">
+        <h2>Overall assessment</h2>
+        <div class="verdict-row">
+          <div class="gauge">
+            <div class="gauge-value" id="gauge-value">--</div>
+            <div class="gauge-label">risk score</div>
+          </div>
+          <div class="verdict-copy">
+            <div class="verdict" id="verdict"></div>
+            <p class="prob" id="prob-text"></p>
+            <div class="meter"><div class="meter-fill" id="meter-fill"></div></div>
+            <div class="meter-scale"><span>Low</span><span>Moderate</span><span>High</span></div>
+          </div>
+        </div>
+      </div>
 
-      <h3>Severity distribution</h3>
-      <ul class="bars" id="categorical-bars"></ul>
+      <div class="card">
+        <h2>Individual model predictions</h2>
+        <p class="lead">Each model votes independently; the assessment above is their
+          average (ensemble).</p>
+        <div class="model-cards" id="model-cards"></div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <h2>Severity distribution</h2>
+          <p class="lead">5-class neural-network output.</p>
+          <ul class="bars" id="categorical-bars"></ul>
+        </div>
+        <div class="card">
+          <h2>Key risk factors</h2>
+          <p class="lead">Features pushing the risk up (red) or down (green).</p>
+          <ul class="bars factors" id="risk-factors"></ul>
+        </div>
+      </div>
     </section>
 
-    <p class="disclaimer">
-      <strong>Disclaimer:</strong> This application is a machine-learning
-      demonstration built on a small public dataset. It is <em>not</em> a
-      medical device and must not be used for real clinical decisions.
-    </p>
+    <!-- ================= MODEL PERFORMANCE ================= -->
+    <section class="card" id="performance">
+      <h2>Model performance</h2>
+      <p class="lead">
+        Accuracy and ROC-AUC measured on the held-out test set
+        ({{ meta.n_test_samples }} patients that were never used for training).
+      </p>
+      <table class="table">
+        <thead>
+          <tr><th>Model</th><th>Accuracy</th><th>ROC-AUC</th></tr>
+        </thead>
+        <tbody>
+          {% for key, info in meta.models.items() %}
+          <tr>
+            <td>{{ info.label }}</td>
+            <td>
+              <div class="cell-bar"><span style="width: {{ info.accuracy * 100 }}%"></span></div>
+              {{ (info.accuracy * 100)|round(1) }}%
+            </td>
+            <td>{{ (info.roc_auc * 100)|round(1) }}%</td>
+          </tr>
+          {% endfor %}
+          <tr>
+            <td>Neural Network &mdash; severity (5-class)</td>
+            <td>
+              <div class="cell-bar"><span style="width: {{ meta.categorical_accuracy * 100 }}%"></span></div>
+              {{ (meta.categorical_accuracy * 100)|round(1) }}%
+            </td>
+            <td>&mdash;</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ================= DATASET ================= -->
+    <section class="card" id="dataset">
+      <h2>Dataset &amp; feature reference</h2>
+      <p class="lead">
+        UCI Cleveland heart disease dataset &mdash;
+        {{ meta.n_total_samples }} patients
+        ({{ meta.n_training_samples }} train / {{ meta.n_test_samples }} test).
+      </p>
+      <table class="table">
+        <thead>
+          <tr><th>Feature</th><th>Group</th><th>Typical range</th><th>Mean</th></tr>
+        </thead>
+        <tbody>
+          {% for f in features %}
+          <tr>
+            <td>{{ f.label }}{% if f.unit %} <span class="unit">({{ f.unit }})</span>{% endif %}</td>
+            <td>{{ f.group }}</td>
+            <td>{{ f.stats.min }} &ndash; {{ f.stats.max }}</td>
+            <td>{{ f.stats.mean }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ================= API ================= -->
+    <section class="card" id="api">
+      <h2>JSON API</h2>
+      <p class="lead">The interface is powered by a small API you can call directly.</p>
+      <table class="table">
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill">GET</span></td><td><code>/api/health</code></td><td>Health check</td></tr>
+          <tr><td><span class="pill">GET</span></td><td><code>/api/metadata</code></td><td>Features, statistics &amp; model metrics</td></tr>
+          <tr><td><span class="pill post">POST</span></td><td><code>/api/predict</code></td><td>Run all models and return the ensemble</td></tr>
+        </tbody>
+      </table>
+      <pre class="code">curl -X POST http://127.0.0.1:5000/api/predict \
+  -H "Content-Type: application/json" \
+  -d '{"age":63,"sex":1,"cp":1,"trestbps":145,"chol":233,"fbs":1,
+       "restecg":2,"thalach":150,"exang":0,"oldpeak":2.3,"slope":3,
+       "ca":0,"thal":6}'</pre>
+    </section>
+
+    <!-- ================= ABOUT ================= -->
+    <section class="card" id="about">
+      <h2>About this project</h2>
+      <p>
+        The heart-disease notebook was converted into a runnable Python script
+        (<code>train.py</code>) and wrapped in this Flask web application. Five
+        binary classifiers (a neural network plus logistic regression, random
+        forest, Gaussian naive Bayes and K-NN) and one 5-class severity network
+        are trained on the UCI Cleveland dataset. All models are exported to a
+        single JSON file and evaluated in pure Python, so the site deploys to
+        Vercel without TensorFlow or scikit-learn.
+      </p>
+      <p class="disclaimer">
+        <strong>Disclaimer:</strong> this is an educational machine-learning demo
+        built on a small public dataset. It is <em>not</em> a medical device and
+        must not be used for real clinical decisions.
+      </p>
+    </section>
   </main>
 
   <footer>
     <p>
-      Model trained with Keras &middot; Served with Flask &middot;
+      Built with Keras &amp; scikit-learn &middot; Served with Flask &middot;
       Deployed on Vercel
     </p>
   </footer>
 
+  <button class="to-top" id="to-top" aria-label="Back to top">&uarr;</button>
+
+  <script>
+    window.FEATURE_LABELS = {
+      {% for f in features %}"{{ f.name }}": "{{ f.label }}"{% if not loop.last %},{% endif %}
+      {% endfor %}
+    };
+  </script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
+
