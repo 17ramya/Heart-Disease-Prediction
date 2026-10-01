@@ -242,7 +242,9 @@ Open **http://127.0.0.1:5000** in your browser. You are redirected to the
 
 ## Live Demo link
 
-
+```bash
+https://heart-disease-prediction-jet.vercel.app/
+```
 
 ## 🔁 Retrain the models (optional)
 
