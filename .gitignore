@@ -16,3 +16,7 @@ pkgs.txt
 
 # Vercel
 .vercel
+
+# Locally registered accounts (created by the /signup page)
+users.json
+users.json.tmp

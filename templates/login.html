@@ -41,6 +41,11 @@
         <button type="submit" class="auth-btn">Sign in</button>
       </form>
 
+      <p class="auth-alt">
+        Don&rsquo;t have an account?
+        <a href="{{ url_for('signup') }}{% if next %}?next={{ next|urlencode }}{% endif %}">Create one</a>
+      </p>
+
       <div class="auth-hint">
         <strong>Demo account</strong>
         <span>username <code>admin</code> &nbsp;&middot;&nbsp; password <code>heart123</code></span>

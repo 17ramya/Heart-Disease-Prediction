@@ -408,6 +408,14 @@ code { background: var(--code-bg); color: var(--ink); padding: 0.1rem 0.35rem;
 }
 .auth-btn:hover { background: var(--primary-dark); }
 .auth-btn:active { transform: translateY(1px); }
+.auth-alt {
+  margin: 1.1rem 0 0;
+  text-align: center;
+  font-size: 0.86rem;
+  color: #64748b;
+}
+.auth-alt a { color: var(--primary); font-weight: 600; text-decoration: none; }
+.auth-alt a:hover { text-decoration: underline; }
 .alert {
   background: #fee2e2;
   color: #991b1b;

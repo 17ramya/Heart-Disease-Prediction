@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create account &middot; Heart Disease Prediction</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="auth-body">
+
+  <main class="auth-wrap">
+    <section class="auth-card">
+      <div class="auth-brand">
+        <span class="brand-heart">&#10084;</span>
+        <span>Heart<strong>Risk</strong></span>
+      </div>
+
+      <h1>Create account</h1>
+      <p class="auth-sub">Heart Disease Prediction &mdash; new user sign up</p>
+
+      {% if error %}
+      <div class="alert" role="alert">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('signup') }}" autocomplete="off">
+        <input type="hidden" name="next" value="{{ next }}" />
+
+        <label class="auth-field">
+          <span>Username</span>
+          <input type="text" name="username" id="username" required autofocus
+                 autocomplete="off" value="{{ username }}"
+                 placeholder="3&ndash;24 characters (a-z, 0-9, . _ -)" />
+        </label>
+
+        <label class="auth-field">
+          <span>Password</span>
+          <input type="password" name="password" id="password" required
+                 minlength="{{ min_password }}" autocomplete="new-password"
+                 placeholder="At least {{ min_password }} characters" />
+        </label>
+
+        <label class="auth-field">
+          <span>Confirm password</span>
+          <input type="password" name="confirm" id="confirm" required
+                 minlength="{{ min_password }}" autocomplete="new-password"
+                 placeholder="Repeat the password" />
+        </label>
+
+        <button type="submit" class="auth-btn">Create account</button>
+      </form>
+
+      <p class="auth-alt">
+        Already registered?
+        <a href="{{ url_for('login') }}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign in</a>
+      </p>
+
+      <div class="auth-hint">
+        <strong>How accounts are stored</strong>
+        <span>New users are saved to <code>users.json</code> next to the app.</span>
+        <small>
+          The demo account <code>admin</code> / <code>heart123</code> always works.
+          On a read-only host such as Vercel registrations go to a temporary file
+          and do not survive a redeploy.
+        </small>
+      </div>
+    </section>
+
+    <p class="auth-foot">
+      Educational machine-learning demo &mdash; not a medical device.
+    </p>
+  </main>
+
+</body>
+</html>

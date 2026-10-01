@@ -5,10 +5,12 @@ Run with::
     python -m unittest test_app -v
 """
 
+import json
+import os
 import re
+import shutil
+import tempfile
 import unittest
-
-from werkzeug.security import generate_password_hash
 
 import app as app_module
 from app import FEATURES, app
@@ -27,9 +29,16 @@ TEST_PASSWORD = "s3cret-pass"
 class HeartDiseaseAppTests(unittest.TestCase):
     def setUp(self):
         app.config["TESTING"] = True
-        # Deterministic user store that does not depend on the environment.
-        app_module.USERS = {TEST_USER: generate_password_hash(TEST_PASSWORD)}
+        # A throwaway user database, so tests never touch the real users.json
+        # and never depend on the environment accounts.
+        self.users_dir = tempfile.mkdtemp()
+        store = app_module.UserStore(os.path.join(self.users_dir, "users.json"))
+        store.add(TEST_USER, TEST_PASSWORD)
+        app_module.USERS = store
         self.client = app.test_client()
+
+    def tearDown(self):
+        shutil.rmtree(self.users_dir, ignore_errors=True)
 
     # ------------------------------------------------------------------ #
     # helpers
@@ -89,6 +98,84 @@ class HeartDiseaseAppTests(unittest.TestCase):
         resp = self.client.get("/api/health")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.get_json()["status"], "ok")
+
+    # ------------------------------------------------------------------ #
+    # registration (sign up)
+    # ------------------------------------------------------------------ #
+
+    def signup(self, username, password, confirm=None):
+        return self.client.post(
+            "/signup",
+            data={
+                "username": username,
+                "password": password,
+                "confirm": password if confirm is None else confirm,
+            },
+            follow_redirects=False,
+        )
+
+    def test_signup_page_is_light_mode(self):
+        resp = self.client.get("/signup")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode()
+        self.assertIn("Create account", html)
+        self.assertIn('data-theme="light"', html)
+
+    def test_login_page_links_to_signup(self):
+        html = self.client.get("/login").data.decode()
+        self.assertIn('href="/signup"', html)
+
+    def test_signup_creates_account_and_signs_in(self):
+        resp = self.signup("newcomer", "hunter2!")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(self.client.get("/").status_code, 200)  # auto signed in
+
+        # ... and the new account can sign in again afterwards
+        self.client.get("/logout")
+        self.assertEqual(self.client.get("/").status_code, 302)
+        self.assertEqual(self.login("newcomer", "hunter2!").status_code, 302)
+
+    def test_signup_account_reaches_the_api(self):
+        self.signup("apiuser", "hunter2!")
+        resp = self.client.post("/api/predict", json=VALID_PAYLOAD)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_signup_persists_to_disk(self):
+        self.signup("diskuser", "hunter2!")
+        with open(app_module.USERS.path, encoding="utf-8") as handle:
+            saved = json.load(handle)
+        self.assertIn("diskuser", saved)
+        self.assertIn("password", saved["diskuser"])
+        self.assertNotIn("hunter2!", json.dumps(saved))  # never stored in clear
+
+    def test_signup_rejects_duplicate_username(self):
+        resp = self.signup(TEST_USER, "another-pass")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("already taken", resp.data.decode())
+
+    def test_signup_rejects_short_password(self):
+        resp = self.signup("shorty", "123")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("at least", resp.data.decode())
+
+    def test_signup_rejects_mismatched_confirmation(self):
+        resp = self.signup("mismatch", "hunter2!", confirm="something-else")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("do not match", resp.data.decode())
+
+    def test_signup_rejects_invalid_username(self):
+        resp = self.signup("no spaces allowed", "hunter2!")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Username must be", resp.data.decode())
+
+    def test_signup_unavailable_when_logged_in(self):
+        self.login()
+        self.assertEqual(self.client.get("/signup").status_code, 302)
+
+    def test_default_account_always_present(self):
+        # The environment/default account is seeded into the store.
+        self.assertTrue(app_module.authenticate(TEST_USER, TEST_PASSWORD))
+        self.assertIsNone(app_module.authenticate(TEST_USER, "wrong"))
 
     # ------------------------------------------------------------------ #
     # application

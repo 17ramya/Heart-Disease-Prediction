@@ -17,9 +17,10 @@ runnable Python script and turns it into a deployable Flask website.
   input sections, an animated **risk gauge**, **per-model prediction cards**, a
   **severity chart** and a **"key risk factors"** breakdown – all vanilla JS,
   no build step.
-- 🔐 **Login + light mode** – the whole site (pages *and* API) sits behind a
-  session login with a light-mode sign-in page, and the interface opens in
-  **light mode** with a light/dark toggle in the menu. Forms always start empty.
+- 🔐 **Sign in / sign up + light mode** – the whole site (pages *and* API) sits
+  behind a session login, with light-mode **sign-in** and **sign-up** pages so
+  anyone can register an account. The interface opens in **light mode** with a
+  light/dark toggle in the menu, and forms always start empty.
 - ⚡ **Zero heavy dependencies at runtime** – the trained weights are exported
   to `model/weights.json` and evaluated in pure Python, so the deployed app
   needs **only Flask** (no TensorFlow, no scikit-learn). This is what keeps it
@@ -38,7 +39,7 @@ runnable Python script and turns it into a deployable Flask website.
 | Classic models | Logistic Regression, Random Forest, Gaussian NB, K-Nearest Neighbours |
 | Backend | Flask (WSGI) |
 | Frontend | Server-rendered HTML + vanilla JS: sticky menu, risk gauge, cards, charts |
-| Auth | Session login (`/login`) with hashed passwords; UI **and** API protected |
+| Auth | Session login **and self-service sign up** (`/login`, `/signup`); UI **and** API protected |
 | Theme | **Light mode by default** + light/dark toggle in the top menu |
 | Runtime deps | Flask only (`requirements.txt`) |
 | Training deps | TensorFlow / Keras / scikit-learn (`requirements-train.txt`) |
@@ -80,11 +81,13 @@ Heart-Disease-Prediction/
 │   └── feature_histograms.png # EDA plot (generated)
 ├── templates/
 │   ├── index.html             # Web UI
-│   └── login.html             # Sign-in page (light mode)
+│   ├── login.html             # Sign-in page (light mode)
+│   └── signup.html            # Sign-up page (light mode)
 ├── static/
 │   ├── style.css              # Styles
 │   └── app.js                 # Front-end logic
 ├── test_app.py                # Unit tests (unittest)
+├── users.json                 # Registered accounts (generated, git-ignored)
 ├── requirements.txt           # Runtime dependencies (Flask) → used by Vercel
 ├── requirements-train.txt     # Training dependencies (TensorFlow, sklearn, …)
 ├── .python-version            # Pins Python 3.12 for Vercel
@@ -123,31 +126,52 @@ a refresh or a back/forward navigation.
 
 ## 🔐 Authentication
 
-Everything except `/api/health` sits behind a session login.
+Everything except `/api/health` sits behind a session login, and the app supports
+**both signing in and signing up**.
 
-* **Sign-in page** `/login` (light mode) — username + password, hashed with
-  `werkzeug.security` (`generate_password_hash` / `check_password_hash`).
+| Page | Purpose |
+| --- | --- |
+| `/login` | Sign in with an existing account (light mode) |
+| `/signup` | Create a new account — signs you in straight away (light mode) |
+| `/logout` | End the session |
+
+* Passwords are hashed with `werkzeug.security` (`generate_password_hash` /
+  `check_password_hash`) — they are never stored or logged in clear text.
+* Registration rules: username **3–24** characters (`a–z A–Z 0–9 . _ -`),
+  password **≥ 6** characters, the confirmation must match, and duplicate
+  usernames are rejected.
 * Visiting `/` or any `/api/*` endpoint without a session redirects browsers to
   `/login` and answers API clients with
   **`401 {"error": "Authentication required."}`**.
-* The top menu shows the signed-in user and a **Sign out** link (`/logout`).
+* The top menu shows the signed-in user and a **Sign out** link.
 * Sessions are signed cookies valid for **7 days**.
 
-**Default demo credentials**
+### Where accounts are stored
+
+Accounts created at `/signup` are written to **`users.json`** next to `app.py`
+(git-ignored). The store tries, in order: `USERS_FILE` → `./users.json` → a
+temporary file → memory, so the app keeps working even on a read-only
+filesystem. Accounts defined through the environment are always present and take
+precedence over a same-named account in the file.
+
+### Default demo account
 
 | Username | Password |
 | --- | --- |
 | `admin` | `heart123` |
 
-**Change them with environment variables** (locally, or in the Vercel dashboard
-under *Settings → Environment Variables*):
+### Environment variables
+
+Set these locally, or in the Vercel dashboard under
+*Settings → Environment Variables*:
 
 | Variable | Purpose |
 | --- | --- |
 | `SECRET_KEY` | **Set this in production** — signs the session cookie |
-| `APP_USERNAME` | Username for a single account |
+| `APP_USERNAME` | Username for a single built-in account |
 | `APP_PASSWORD` | Password for that account |
-| `APP_USERS` | Several accounts, e.g. `alice:secret,bob:hunter2` |
+| `APP_USERS` | Several built-in accounts, e.g. `alice:secret,bob:hunter2` |
+| `USERS_FILE` | Where registered accounts are stored (default `users.json`) |
 
 ```powershell
 $env:SECRET_KEY="a-long-random-string"
@@ -155,8 +179,15 @@ $env:APP_USERNAME="ramya"; $env:APP_PASSWORD="my-password"
 python app.py
 ```
 
-> The login page shows the demo credentials as a hint. Delete the `.auth-hint`
-> block from `templates/login.html` if you don't want that.
+> The sign-in / sign-up pages show the demo credentials as a hint. Delete the
+> `.auth-hint` block from `templates/login.html` and `templates/signup.html` if
+> you don't want that.
+
+> ⚠️ **Serverless hosts (Vercel):** the deployment bundle is read-only, so
+> `users.json` lands in a temporary directory — registrations do **not** survive
+> a redeploy and are not shared between instances. For real multi-user
+> sign-up on Vercel, point `USERS_FILE` at persistent storage or swap the store
+> for a database (e.g. Vercel Postgres / KV).
 
 ---
 
@@ -249,6 +280,8 @@ Restart `python app.py` afterwards to serve the freshly trained model.
 | --- | --- | --- |
 | `GET` | `/login` | Sign-in page (light mode) |
 | `POST` | `/login` | Submit credentials (`username`, `password`, optional `next`) |
+| `GET` | `/signup` | Sign-up page (light mode) |
+| `POST` | `/signup` | Register (`username`, `password`, `confirm`) → auto sign-in |
 | `GET` | `/logout` | End the session |
 | `GET` | `/` | Web UI *(requires login)* |
 | `GET` | `/api/health` | Health check → `{"status": "ok"}` *(public)* |
@@ -369,6 +402,9 @@ that file (e.g. `3.13`).
 | Vercel build tries to install TensorFlow | Confirm `requirements.txt` contains only `Flask`; training deps live in `requirements-train.txt`. |
 | Port 5000 already in use | Run with `set PORT=5001 && python app.py` (Windows) or `PORT=5001 python app.py` (macOS/Linux). |
 | Can't sign in | Use `admin` / `heart123`, or the value of `APP_USERNAME` / `APP_PASSWORD` if you set them. |
+| "That username is already taken" | Pick another username, or use **Sign in** instead of **Create one**. |
+| "Password must be at least 6 characters" | Registration requires ≥ 6 characters (see `MIN_PASSWORD_LENGTH` in `app.py`). |
+| Registered users vanish after a redeploy (Vercel) | Expected — the bundle is read-only so `users.json` falls back to `/tmp`. Point `USERS_FILE` at persistent storage or use a database. |
 | Signed out after every deploy (Vercel) | Set a fixed `SECRET_KEY` environment variable so the session cookie is always signed with the same key. |
 | `401 {"error":"Authentication required."}` from a script | Sign in first and reuse the cookie: `curl -c jar.txt -d "username=admin&password=heart123" …/login`, then add `-b jar.txt`. |
 | An input box shows an old value | Hard-refresh (Ctrl+F5). The page clears every field on load and sets `autocomplete="off"` on all inputs. |
@@ -390,7 +426,8 @@ that file (e.g. `3.13`).
   never affects predictions.
 - Login state lives in a signed session cookie (set `SECRET_KEY`). Passwords are
   stored as salted hashes via `werkzeug.security`; the built-in demo account is
-  `admin` / `heart123` and every page except `/api/health` requires a session.
+  `admin` / `heart123`, new accounts can be created at `/signup` (kept in
+  `users.json`), and every page except `/api/health` requires a session.
 - **This project is an educational machine-learning demo on a small public
   dataset. It is not a medical device and must not be used for real clinical
   decisions.**
