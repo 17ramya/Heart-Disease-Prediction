@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heart Disease Prediction</title>
+  <meta name="description"
+        content="Neural-network heart disease risk prediction based on the UCI Cleveland dataset." />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="heart">&#10084;</div>
+      <h1>Heart Disease Prediction</h1>
+      <p>
+        Enter the patient's clinical measurements below. Two neural networks
+        (a 5-class severity model and a binary disease / no-disease model)
+        return a prediction instantly.
+      </p>
+    </div>
+  </header>
+
+  <main class="container">
+    <form id="predict-form" class="card" autocomplete="off">
+      <h2>Patient data</h2>
+      <div class="grid">
+        {% for feature in features %}
+        <div class="field">
+          <label for="{{ feature.name }}">{{ feature.label }}</label>
+          {% if feature.type == 'select' %}
+          <select id="{{ feature.name }}" name="{{ feature.name }}">
+            {% for option in feature.options %}
+            <option value="{{ option.value }}"
+              {% if option.value == feature.default %}selected{% endif %}>
+              {{ option.label }}
+            </option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <input id="{{ feature.name }}" name="{{ feature.name }}" type="number"
+                 value="{{ feature.default }}"
+                 {% if feature.min is defined %}min="{{ feature.min }}"{% endif %}
+                 {% if feature.max is defined %}max="{{ feature.max }}"{% endif %}
+                 {% if feature.step is defined %}step="{{ feature.step }}"{% endif %}
+                 required />
+          {% endif %}
+          {% if feature.help is defined %}
+          <small>{{ feature.help }}</small>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="submit-btn">Predict</button>
+        <button type="reset" class="ghost">Reset</button>
+      </div>
+    </form>
+
+    <section id="result" class="card result hidden" aria-live="polite">
+      <h2>Result</h2>
+      <div class="verdict" id="verdict"></div>
+      <div class="meter"><div class="meter-fill" id="meter-fill"></div></div>
+      <p class="prob" id="prob-text"></p>
+
+      <h3>Severity distribution</h3>
+      <ul class="bars" id="categorical-bars"></ul>
+    </section>
+
+    <p class="disclaimer">
+      <strong>Disclaimer:</strong> This application is a machine-learning
+      demonstration built on a small public dataset. It is <em>not</em> a
+      medical device and must not be used for real clinical decisions.
+    </p>
+  </main>
+
+  <footer>
+    <p>
+      Model trained with Keras &middot; Served with Flask &middot;
+      Deployed on Vercel
+    </p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

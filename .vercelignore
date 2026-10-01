@@ -1,0 +1,24 @@
+# Files ignored when uploading the serverless function to Vercel.
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Training-only artefacts (not needed at runtime).
+train_output.log
+install.log
+check.log
+urlcheck.log
+apicheck.log
+*.log
+data/
+
+# Docs / big source assets not needed to serve the app.
+*.pptx
+*.docx
+*.ipynb
+Heart disease prediction/
+
+.git/
+.gitignore

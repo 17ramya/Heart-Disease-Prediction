@@ -1,0 +1,4 @@
+# Runtime dependencies for the web application (deployed to Vercel).
+# Keep this list small - Vercel serverless functions have a size limit and
+# TensorFlow is deliberately NOT required at runtime (see model.py).
+Flask==3.0.3
